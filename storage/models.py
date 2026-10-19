@@ -3,7 +3,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -36,3 +36,16 @@ class Call(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     compliance_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class TranscriptLine(Base):
+    __tablename__ = "transcript_lines"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    call_id: Mapped[int] = mapped_column(ForeignKey("calls.id"), nullable=False)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    speaker: Mapped[str] = mapped_column(String, nullable=False)  # "agent" | "user"
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    ts_abs: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ts_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    interrupted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

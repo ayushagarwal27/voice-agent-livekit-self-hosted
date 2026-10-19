@@ -25,6 +25,13 @@ class AgentOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AgentSummary(BaseModel):
+    id: int
+    name: str
+
+    model_config = {"from_attributes": True}
+
+
 @router.post("", response_model=AgentOut, status_code=201)
 def create_agent(payload: AgentCreate, session: Session = Depends(get_session)) -> Agent:
     agent = Agent(
@@ -37,6 +44,11 @@ def create_agent(payload: AgentCreate, session: Session = Depends(get_session)) 
     session.commit()
     session.refresh(agent)
     return agent
+
+
+@router.get("", response_model=list[AgentSummary])
+def list_agents(session: Session = Depends(get_session)) -> list[Agent]:
+    return list(session.query(Agent).order_by(Agent.id).all())
 
 
 @router.get("/{agent_id}", response_model=AgentOut)

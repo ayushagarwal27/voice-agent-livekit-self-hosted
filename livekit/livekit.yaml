@@ -1,4 +1,8 @@
 port: 7880
+# Node IP (so the server advertises 127.0.0.1 instead of its internal Docker
+# bridge IP as the ICE host candidate) is set via the NODE_IP env var /
+# --node-ip flag in docker-compose.yml, not here - it's a CLI-only setting
+# in this livekit-server version (1.13.10), not a YAML config field.
 rtc:
   tcp_port: 7881
   port_range_start: 50000

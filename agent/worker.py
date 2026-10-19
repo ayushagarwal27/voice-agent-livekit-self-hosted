@@ -13,6 +13,7 @@ Usage:
 """
 
 import json
+import time
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
@@ -20,6 +21,7 @@ from livekit.agents import Agent, AgentSession, JobContext, JobProcess, WorkerOp
 from livekit.plugins import cartesia, deepgram, openai, silero
 from livekit.plugins.turn_detector.english import EnglishModel
 
+from agent.transcript import attach_transcript_recorder
 from storage.db import SessionLocal
 from storage.models import Agent as AgentRow
 from storage.models import Call
@@ -94,6 +96,9 @@ async def entrypoint(ctx: JobContext) -> None:
         # project does not use (rule 2).
         turn_handling={"turn_detection": EnglishModel(), "interruption": {"mode": "vad"}},
     )
+
+    call_start_ts = time.time()
+    attach_transcript_recorder(session, call_id, call_start_ts)
 
     await session.start(agent=SupportAgent(system_prompt), room=ctx.room)
     _mark_call_status(call_id, "active")

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -9,7 +10,7 @@ from sqlalchemy.orm import Session
 from backend.services.dispatch import create_room_and_dispatch
 from backend.services.tokens import mint_customer_token
 from storage.db import get_session
-from storage.models import Agent, Call
+from storage.models import Agent, Call, TranscriptLine
 
 router = APIRouter(prefix="/calls", tags=["calls"])
 
@@ -45,11 +46,23 @@ class CallCreateOut(BaseModel):
     livekit_url: str
 
 
+class TranscriptLineOut(BaseModel):
+    seq: int
+    speaker: str
+    text: str
+    ts_abs: datetime
+    ts_ms: int
+    interrupted: bool
+
+    model_config = {"from_attributes": True}
+
+
 class CallOut(BaseModel):
     id: int
     agent_id: int
     room_name: str
     status: str
+    transcript: list[TranscriptLineOut] | None = None
 
     model_config = {"from_attributes": True}
 
@@ -89,8 +102,25 @@ async def create_call(payload: CallCreate, session: Session = Depends(get_sessio
 
 
 @router.get("/{call_id}", response_model=CallOut)
-def get_call(call_id: int, session: Session = Depends(get_session)) -> Call:
+def get_call(call_id: int, session: Session = Depends(get_session)) -> CallOut:
     call = session.get(Call, call_id)
     if call is None:
         raise HTTPException(status_code=404, detail="call not found")
-    return call
+
+    transcript = None
+    if call.status == "ended":
+        lines = (
+            session.query(TranscriptLine)
+            .filter_by(call_id=call_id)
+            .order_by(TranscriptLine.seq)
+            .all()
+        )
+        transcript = [TranscriptLineOut.model_validate(line) for line in lines]
+
+    return CallOut(
+        id=call.id,
+        agent_id=call.agent_id,
+        room_name=call.room_name,
+        status=call.status,
+        transcript=transcript,
+    )

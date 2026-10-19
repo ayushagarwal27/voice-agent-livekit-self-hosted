@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Voice Agent</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.25rem; }
+    .row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; }
+    select, button { font-size: 1rem; padding: 0.4rem 0.8rem; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #status { color: #666; margin-bottom: 1rem; }
+    #transcript {
+      border: 1px solid #ccc; border-radius: 6px; padding: 0.75rem;
+      height: 360px; overflow-y: auto; background: #fafafa;
+    }
+    .line { margin-bottom: 0.5rem; line-height: 1.4; }
+    .line .speaker { font-weight: 600; }
+    .line.agent .speaker { color: #1a56db; }
+    .line.user .speaker { color: #0f7a3d; }
+    .line.interim { opacity: 0.6; }
+  </style>
+</head>
+<body>
+  <h1>Voice Agent</h1>
+
+  <div class="row">
+    <select id="agent-select"></select>
+    <button id="call-btn">Call</button>
+    <button id="hangup-btn" disabled>Hang up</button>
+    <button id="mute-btn" disabled>Mute</button>
+  </div>
+
+  <div id="status">Not connected.</div>
+
+  <div id="transcript"></div>
+
+  <div id="remote-audio-container" style="display: none"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/livekit-client/2.23.0/livekit-client.umd.min.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
