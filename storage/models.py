@@ -67,3 +67,12 @@ class TurnMetrics(Base):
     audio_published_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     total_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class Whisper(Base):
+    __tablename__ = "whispers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    call_id: Mapped[int] = mapped_column(ForeignKey("calls.id"), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

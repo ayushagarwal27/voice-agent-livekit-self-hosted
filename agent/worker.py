@@ -26,6 +26,7 @@ from livekit.plugins.turn_detector.english import EnglishModel
 
 from agent.metrics import attach_metrics_recorder
 from agent.transcript import attach_transcript_recorder
+from agent.whisper import attach_whisper_listener
 from storage.db import SessionLocal
 from storage.models import Agent as AgentRow
 from storage.models import Call
@@ -130,6 +131,7 @@ async def entrypoint(ctx: JobContext) -> None:
     call_start_ts = time.time()
     attach_transcript_recorder(session, call_id, call_start_ts)
     attach_metrics_recorder(session, call_id)
+    attach_whisper_listener(ctx.room, session, call_id)
 
     agent = SupportAgent(system_prompt)
 

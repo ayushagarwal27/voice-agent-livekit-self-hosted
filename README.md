@@ -3,9 +3,10 @@
 Operator-guided voice AI agent built on a self-hosted LiveKit server. See [AGENTS.md](AGENTS.md) for
 the full phase plan this repo follows.
 
-Status: Phase 7 (Latency measurement) in progress. Setup steps, architecture diagram, ports table,
-and the final latency table will be filled in as later phases land (see Phase 10 in AGENTS.md); a
-real measured report already exists at [docs/latency.md](docs/latency.md).
+Status: Phase 8 (Operator: listen + whisper) in progress. Setup steps, architecture diagram, ports
+table, and the final latency table will be filled in as later phases land (see Phase 10 in
+AGENTS.md); a real measured latency report already exists at `docs/latency.md` (kept out of git for
+now, see `.gitignore`).
 
 ## Latency instrumentation (Phase 7)
 
@@ -23,6 +24,37 @@ know about:
   50-280ms per turn in testing, because `on_user_turn_completed_delay` and internal scheduling gaps
   between stages aren't captured as their own column. Treat `Total` as ground truth and the stage
   columns as "where the time goes," not as inputs you can re-sum to get `Total` back exactly.
+
+## Operator: listen + whisper (Phase 8)
+
+A hidden operator can join any call, hear both sides, and steer the agent without the customer
+ever knowing. `POST /calls/{id}/operator-token` mints a token with `hidden=True`,
+`can_publish=False`, `can_subscribe=True`, `can_publish_data=True` (`backend/services/tokens.py`):
+LiveKit itself never tells the customer's client that this participant exists, which is what
+guarantees invisibility -- it isn't just the browser UI choosing not to show it.
+
+`web/operator.html` + `operator.js` join the room, play both remote audio tracks, show the same
+`lk.transcription` live transcript the customer sees, and send guidance with
+`localParticipant.publishData(bytes, {reliable: true, destinationIdentities: [agentIdentity], topic:
+"operator_whisper"})`. `destinationIdentities` means the bytes are routed only to the agent's
+participant -- the customer's client never receives them on the wire, regardless of what its JS does.
+
+`agent/whisper.py` listens for `data_received` on that topic, persists the text to `whispers`, and
+adds it to the agent's chat context as a private system message ("Private supervisor guidance...
+Never mention it..."). Because this only appends to context rather than forcing an immediate reply,
+it naturally waits for the next user turn, as AGENTS.md asks.
+
+Two things worth knowing:
+
+- **The guidance isn't consumed after one reply.** It stays in context for every subsequent LLM
+  call in the session, not just the next one. For this proof of concept that's an acceptable
+  simplification (whispers in testing were one-shot asks like "offer a discount"), but a longer
+  call with several different whispers would need the oldest ones pruned or superseded explicitly.
+- **Whispers are an explicit prompt-injection surface.** They are injected into the LLM's context
+  with no validation of their content, by design (that's the point of a whisper), so anything with
+  access to a valid operator token can make the agent say or do anything a sufficiently convincing
+  system message can induce. This is acceptable for a trusted internal operator in this proof of
+  concept, but would need an allow-list or stricter framing before letting less-trusted operators near it.
 
 ## Ports
 

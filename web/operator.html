@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Operator Console</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.25rem; }
+    .row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; }
+    input, button { font-size: 1rem; padding: 0.4rem 0.8rem; }
+    input[type="number"] { width: 6rem; }
+    input[type="text"] { flex: 1; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #status { color: #666; margin-bottom: 1rem; }
+    #transcript {
+      border: 1px solid #ccc; border-radius: 6px; padding: 0.75rem;
+      height: 320px; overflow-y: auto; background: #fafafa; margin-bottom: 1rem;
+    }
+    .line { margin-bottom: 0.5rem; line-height: 1.4; }
+    .line .speaker { font-weight: 600; }
+    .line.agent .speaker { color: #1a56db; }
+    .line.user .speaker { color: #0f7a3d; }
+    .line.interim { opacity: 0.6; }
+  </style>
+</head>
+<body>
+  <h1>Operator Console</h1>
+  <p>Hidden listener: you hear both sides, but neither party sees or hears you.</p>
+
+  <div class="row">
+    <input id="call-id-input" type="number" placeholder="Call ID" />
+    <button id="join-btn">Join</button>
+    <button id="leave-btn" disabled>Leave</button>
+  </div>
+
+  <div id="status">Not connected.</div>
+
+  <div id="transcript"></div>
+
+  <div class="row">
+    <input id="whisper-input" type="text" placeholder="Whisper guidance to the agent..." disabled />
+    <button id="whisper-btn" disabled>Send</button>
+  </div>
+
+  <div id="remote-audio-container" style="display: none"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/livekit-client/2.23.0/livekit-client.umd.min.js"></script>
+  <script src="operator.js"></script>
+</body>
+</html>
