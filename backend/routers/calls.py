@@ -25,6 +25,19 @@ WORKER_JOIN_TIMEOUT_S = 10
 WORKER_JOIN_POLL_INTERVAL_S = 0.5
 
 
+def _browser_livekit_url() -> str:
+    """The URL a browser client should connect to.
+
+    Backend/worker talk to LiveKit over LIVEKIT_URL, which in a container
+    deployment is the internal service address (e.g. ws://livekit:7880) and
+    is not reachable from outside. LIVEKIT_PUBLIC_URL, when set, is the
+    public wss:// address (behind the reverse proxy) to hand to browsers
+    instead. Falls back to LIVEKIT_URL so local dev (same host for both) is
+    unaffected.
+    """
+    return os.environ.get("LIVEKIT_PUBLIC_URL", os.environ["LIVEKIT_URL"])
+
+
 async def _wait_for_worker(session: Session, call_id: int) -> bool:
     loop = asyncio.get_event_loop()
     deadline = loop.time() + WORKER_JOIN_TIMEOUT_S
@@ -114,8 +127,9 @@ async def create_call(payload: CallCreate, session: Session = Depends(get_sessio
         )
 
     token = mint_customer_token(call.room_name, identity=f"customer-{call.id}")
-    livekit_url = os.environ["LIVEKIT_URL"]
-    return CallCreateOut(call_id=call.id, room=call.room_name, token=token, livekit_url=livekit_url)
+    return CallCreateOut(
+        call_id=call.id, room=call.room_name, token=token, livekit_url=_browser_livekit_url()
+    )
 
 
 @router.post("/{call_id}/operator-token", response_model=OperatorTokenOut)
@@ -127,8 +141,7 @@ def create_operator_token(call_id: int, session: Session = Depends(get_session))
     # Suffixed so two operator tabs open on the same call don't collide on identity.
     identity = f"operator-{call_id}-{uuid.uuid4().hex[:8]}"
     token = mint_operator_token(call.room_name, identity=identity)
-    livekit_url = os.environ["LIVEKIT_URL"]
-    return OperatorTokenOut(room=call.room_name, token=token, livekit_url=livekit_url)
+    return OperatorTokenOut(room=call.room_name, token=token, livekit_url=_browser_livekit_url())
 
 
 @router.get("/{call_id}", response_model=CallOut)

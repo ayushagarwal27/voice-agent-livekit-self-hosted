@@ -1,0 +1,13 @@
+.venv
+__pycache__
+*.pyc
+.git
+.pytest_cache
+dev.db
+dev.db-shm
+dev.db-wal
+.env
+.claude
+AGENTS.md
+NOTES.md
+docs

@@ -1,0 +1,84 @@
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: voiceagent-livekit
+    command: --config /etc/livekit.yaml
+    restart: unless-stopped
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+    volumes:
+      - ./livekit/livekit.prod.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "7881:7881/tcp" # ICE/TCP fallback -- must be direct, Traefik can't proxy it
+      - "50000-50100:50000-50100/udp" # RTP/SRTP media -- same, needs a direct path to clients
+    networks:
+      - n8n_default
+      - voiceagent_internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=n8n_default"
+      - "traefik.http.routers.voiceagent-livekit.rule=Host(`${LIVEKIT_DOMAIN}`)"
+      - "traefik.http.routers.voiceagent-livekit.entrypoints=web,websecure"
+      - "traefik.http.routers.voiceagent-livekit.tls=true"
+      - "traefik.http.routers.voiceagent-livekit.tls.certresolver=mytlschallenge"
+      - "traefik.http.services.voiceagent-livekit.loadbalancer.server.port=7880"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: voiceagent-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Overrides .env's dev values: backend talks to LiveKit over the
+      # internal docker network, not the public domain; browsers get
+      # LIVEKIT_PUBLIC_URL instead (see backend/routers/calls.py).
+      LIVEKIT_URL: "ws://livekit:7880"
+      LIVEKIT_PUBLIC_URL: "wss://${LIVEKIT_DOMAIN}"
+      DATABASE_URL: "sqlite:////data/db/prod.db"
+    volumes:
+      - voiceagent_db:/data/db
+    depends_on:
+      - livekit
+    networks:
+      - n8n_default
+      - voiceagent_internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=n8n_default"
+      - "traefik.http.routers.voiceagent-backend.rule=Host(`${BACKEND_DOMAIN}`)"
+      - "traefik.http.routers.voiceagent-backend.entrypoints=web,websecure"
+      - "traefik.http.routers.voiceagent-backend.tls=true"
+      - "traefik.http.routers.voiceagent-backend.tls.certresolver=mytlschallenge"
+      - "traefik.http.services.voiceagent-backend.loadbalancer.server.port=8000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: agent/Dockerfile
+    container_name: voiceagent-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      LIVEKIT_URL: "ws://livekit:7880"
+      DATABASE_URL: "sqlite:////data/db/prod.db"
+    volumes:
+      - voiceagent_db:/data/db
+    depends_on:
+      - livekit
+    networks:
+      - voiceagent_internal
+    # No Traefik labels, no n8n_default network: the worker never receives
+    # inbound HTTP, it only dials out to LiveKit and the shared DB file.
+
+networks:
+  n8n_default:
+    external: true
+  voiceagent_internal:
+    driver: bridge
+
+volumes:
+  voiceagent_db:

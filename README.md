@@ -68,6 +68,52 @@ Run the test suite (pure unit tests, no network/provider calls, no running serve
 uv run pytest
 ```
 
+## Deploying to a VPS (self-hosted, behind Traefik)
+
+`docker-compose.prod.yml` is a separate compose file from the local-dev one above --
+deliberately kept out of any other project's compose file on the same box. It builds and
+runs LiveKit, the backend, and the agent worker as three containers, assuming a Traefik
+reverse proxy with an `n8n_default` docker network and a `mytlschallenge` cert resolver
+are already running on the host (true if you have another Traefik-fronted project there
+already; if not, stand up Traefik with that network name/resolver first).
+
+```bash
+# On the VPS
+git clone <this-repo-url> voice_agent_livekit
+cd voice_agent_livekit
+
+cp .env.example .env
+# Fill in DEEPGRAM_API_KEY / OPENAI_API_KEY / CARTESIA_API_KEY as usual, and:
+# - set BACKEND_DOMAIN / LIVEKIT_DOMAIN to your real subdomains
+# - generate a FRESH LIVEKIT_API_KEY/LIVEKIT_API_SECRET pair -- don't reuse the
+#   "devkey" one from local dev; this one is reachable from the public internet.
+# Point both domains' DNS A records at this VPS's IP before continuing (the TLS
+# cert challenge needs them resolving).
+
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Three things that differ from local dev, and why:
+
+- **LiveKit's signalling port (7880) is reverse-proxied by Traefik** (`wss://livekit...`,
+  TLS-terminated), but **its media ports (7881/tcp, 50000-50100/udp) are published
+  directly on the host** -- Traefik proxies HTTP/WS cleanly, but raw RTP/SRTP needs a
+  direct path to the browser, so those still need opening in the VPS firewall (Hostinger's
+  panel and `ufw`/`iptables` on the box itself).
+- **`livekit.prod.yaml` sets `rtc.use_external_ip: true`** instead of a hardcoded
+  `NODE_IP`: on a real public IP, LiveKit uses STUN to discover and advertise it itself,
+  which survives the VPS's IP changing without a config edit.
+- **The backend and worker talk to LiveKit over the internal docker network**
+  (`ws://livekit:7880`, set via the compose file's `environment:`, overriding `.env`'s
+  dev value), but **still hand browsers the public `wss://` address** via
+  `LIVEKIT_PUBLIC_URL` -- see `_browser_livekit_url()` in `backend/routers/calls.py`.
+  Browsers can't reach the internal docker hostname; backend/worker don't need to go
+  through Traefik for their own calls.
+
+SQLite still has the same single-writer caveat as local dev (see Known limitations) --
+it now lives on a named `voiceagent_db` volume shared by the backend and worker
+containers, rather than a file in the repo.
+
 ## Ports & config
 
 | Port             | Purpose                               | Why                                                                                                                                                                                                                                                                             |

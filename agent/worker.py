@@ -6,10 +6,11 @@ room and an agent dispatch carrying `{call_id, agent_id}` as job metadata;
 this entrypoint reads that metadata, loads the persona and call row from the
 DB, and marks the call `active`/`ended` as the session starts and stops.
 
-Usage:
+Usage (module form required -- `python agent/worker.py` can't resolve the
+`agent.*` absolute imports below; `-m` puts the project root on sys.path):
   uv run -m livekit.agents download-files   # once, to fetch the VAD/turn-detector models
-  uv run python agent/worker.py console      # talk to it from the terminal (mic/speakers)
-  uv run python agent/worker.py dev          # join real rooms on the self-hosted LiveKit server
+  uv run python -m agent.worker console      # talk to it from the terminal (mic/speakers)
+  uv run python -m agent.worker dev          # join real rooms on the self-hosted LiveKit server
 """
 
 import json
