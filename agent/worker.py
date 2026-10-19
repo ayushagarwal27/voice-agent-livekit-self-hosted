@@ -13,11 +13,14 @@ Usage:
 """
 
 import json
+import logging
 import time
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from livekit.agents import Agent, AgentSession, JobContext, JobProcess, WorkerOptions, cli
+from livekit.agents.llm import ChatMessage
+from livekit.agents.voice.events import ConversationItemAddedEvent
 from livekit.plugins import cartesia, deepgram, openai, silero
 from livekit.plugins.turn_detector.english import EnglishModel
 
@@ -27,6 +30,8 @@ from storage.models import Agent as AgentRow
 from storage.models import Call
 
 load_dotenv()
+
+logger = logging.getLogger("acme-agent")
 
 AGENT_NAME = "support-agent"
 
@@ -43,9 +48,27 @@ def prewarm(proc: JobProcess) -> None:
 class SupportAgent(Agent):
     def __init__(self, system_prompt: str) -> None:
         super().__init__(instructions=system_prompt)
+        # Full LLM output for the turn currently playing out, captured straight from the
+        # token stream (Phase 6) so an interrupted turn can be compared against the
+        # (possibly shorter) text the framework actually commits to history/transcript.
+        # Single slot: fine because, for this POC, a new generation only starts once the
+        # previous one has either finished or been interrupted.
+        self._last_generated_text = ""
 
     async def on_enter(self) -> None:
         self.session.say(GREETING)
+
+    async def llm_node(self, chat_ctx, tools, model_settings):
+        generated = ""
+        try:
+            async for chunk in Agent.default.llm_node(self, chat_ctx, tools, model_settings):
+                if isinstance(chunk, str):
+                    generated += chunk
+                elif chunk.delta and chunk.delta.content:
+                    generated += chunk.delta.content
+                yield chunk
+        finally:
+            self._last_generated_text = generated
 
 
 def _mark_call_status(call_id: int, status: str, *, ended: bool = False) -> None:
@@ -94,13 +117,36 @@ async def entrypoint(ctx: JobContext) -> None:
         # mode="vad": the default ("adaptive") calls LiveKit's cloud inference
         # service for interruption detection, which this self-hosted-only
         # project does not use (rule 2).
-        turn_handling={"turn_detection": EnglishModel(), "interruption": {"mode": "vad"}},
+        # enabled/min_duration spelled out explicitly (Phase 6): they match the
+        # framework defaults, stated here so the barge-in behaviour is a documented
+        # decision rather than an accident of whatever the library ships next.
+        turn_handling={
+            "turn_detection": EnglishModel(),
+            "interruption": {"mode": "vad", "enabled": True, "min_duration": 0.5},
+        },
     )
 
     call_start_ts = time.time()
     attach_transcript_recorder(session, call_id, call_start_ts)
 
-    await session.start(agent=SupportAgent(system_prompt), room=ctx.room)
+    agent = SupportAgent(system_prompt)
+
+    def _on_conversation_item_added(ev: ConversationItemAddedEvent) -> None:
+        item = ev.item
+        if not isinstance(item, ChatMessage) or item.role != "assistant" or not item.interrupted:
+            return
+        # Phase 6 debug dump: prove the committed history only contains what was
+        # actually spoken, by printing it next to the full (longer) LLM output.
+        logger.info(
+            "interrupted turn — generated=%r spoken=%r",
+            agent._last_generated_text,
+            item.text_content,
+        )
+        logger.info("chat history after interruption: %s", session.history.to_dict())
+
+    session.on("conversation_item_added", _on_conversation_item_added)
+
+    await session.start(agent=agent, room=ctx.room)
     _mark_call_status(call_id, "active")
 
 

@@ -3,7 +3,7 @@
 Operator-guided voice AI agent built on a self-hosted LiveKit server. See [AGENTS.md](AGENTS.md) for
 the full phase plan this repo follows.
 
-Status: Phase 5 (Web client + live transcript) in progress. Setup steps, architecture diagram, ports table,
+Status: Phase 6 (Barge-in with accurate history) in progress. Setup steps, architecture diagram, ports table,
 and latency results will be filled in as later phases land (see Phase 10 in AGENTS.md).
 
 ## Ports
