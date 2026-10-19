@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from backend.routers import agents
+from backend.routers import agents, calls
 from storage.db import init_db
 
 
@@ -15,3 +15,4 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Voice Agent Backend", lifespan=lifespan)
 app.include_router(agents.router)
+app.include_router(calls.router)
