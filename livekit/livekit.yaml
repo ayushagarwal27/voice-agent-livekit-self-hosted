@@ -1,0 +1,10 @@
+port: 7880
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: false
+
+# API keys are intentionally NOT set here (see AGENTS.md rule 6: no secrets in git).
+# They are injected at container start via the LIVEKIT_KEYS env var, sourced from .env.
+# LIVEKIT_KEYS format: "<key>: <secret>" (same shape as the yaml "keys" map, as a string).
