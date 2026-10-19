@@ -3,7 +3,7 @@
 Operator-guided voice AI agent built on a self-hosted LiveKit server. See [AGENTS.md](AGENTS.md) for
 the full phase plan this repo follows.
 
-Status: Phase 8 (Operator: listen + whisper) in progress. Setup steps, architecture diagram, ports
+Status: Phase 9 (Post-call compliance) in progress. Setup steps, architecture diagram, ports
 table, and the final latency table will be filled in as later phases land (see Phase 10 in
 AGENTS.md); a real measured latency report already exists at `docs/latency.md` (kept out of git for
 now, see `.gitignore`).
@@ -55,6 +55,36 @@ Two things worth knowing:
   access to a valid operator token can make the agent say or do anything a sufficiently convincing
   system message can induce. This is acceptable for a trusted internal operator in this proof of
   concept, but would need an allow-list or stricter framing before letting less-trusted operators near it.
+
+## Post-call compliance (Phase 9)
+
+Two rules run automatically in the worker's shutdown callback, right after a call ends and its
+transcript is flushed, and are stored as JSON in `calls.compliance_json`. `GET /calls/{id}` returns
+`compliance: "pending"` until that has happened, then
+`{recording_disclosure: {...}, no_refund_promise: {...}}`. Re-runnable by hand at any time with
+`uv run python -m scripts.run_compliance <call_id>` -- each run just re-evaluates the same (already
+final) transcript and overwrites the stored result, so it is safe to call again.
+
+- **Rule 1, deterministic (`compliance/rules.py`):** the agent must disclose the call is recorded
+  within the first 30 seconds. A regex checks for `record(ed|ing)` near `call`/`conversation` on
+  agent lines whose speaking-start `ts_ms <= 30000`. No LLM involved, so it can never produce a
+  false negative because a model call failed -- see `tests/test_compliance_rule1.py` for the pass
+  /fail/absent/exactly-30s cases.
+- **Rule 2, LLM-judged (`compliance/llm_check.py`):** the agent must never promise a refund. Only
+  the agent's lines (indexed) go to the model, at temperature 0, with Pydantic-validated structured
+  output (`openai`'s `chat.completions.parse`). The model's claimed `offending_line` is checked to
+  really be a substring of a real agent line -- it could otherwise hallucinate one -- and on a
+  mismatch (or an API error) this retries once before giving up and marking the result
+  `status: "error"` rather than trusting an unverifiable claim.
+
+Verified on real calls through the self-hosted server: a whisper ("tell them they'll get a full
+refund...") pushed the agent into actually promising one, and rule 2 correctly failed with the exact
+spoken offending line; a normal call with the recording greeting intact passed rule 1. Also hit, by
+accident, a useful real-world case: Cartesia's TTS API occasionally returned no audio for a line
+(logged as `APIError: no audio frames were pushed for text: ...`), which means that line is never
+committed to history/transcript at all -- rule 1 correctly reported `passed: false` with no evidence
+line on those calls, which is the right call (no audio ever reached the customer, so there was no
+disclosure), not a bug in the rule.
 
 ## Ports
 

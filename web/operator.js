@@ -14,6 +14,7 @@ const whisperBtn = document.getElementById("whisper-btn");
 const statusEl = document.getElementById("status");
 const transcriptEl = document.getElementById("transcript");
 const remoteAudioContainer = document.getElementById("remote-audio-container");
+const whisperLogEl = document.getElementById("whisper-log");
 
 const WHISPER_TOPIC = "operator_whisper";
 
@@ -25,6 +26,32 @@ const transcriptLines = new Map();
 
 function setStatus(text) {
   statusEl.textContent = text;
+}
+
+function logWhisper(text, receivedAt) {
+  const entry = document.createElement("div");
+  entry.className = "entry";
+  const time = document.createElement("time");
+  time.textContent = new Date(receivedAt).toLocaleTimeString();
+  entry.append(time, document.createTextNode(text));
+  whisperLogEl.appendChild(entry);
+  whisperLogEl.scrollTop = whisperLogEl.scrollHeight;
+}
+
+// Past whispers (this call may have had other operator tabs, or this tab may
+// have refreshed) come from `GET /calls/{id}`, which Phase 9 started
+// returning alongside transcript/compliance.
+async function loadWhisperHistory() {
+  try {
+    const res = await fetch(`/calls/${callId}`);
+    if (!res.ok) return;
+    const body = await res.json();
+    for (const w of body.whispers ?? []) {
+      logWhisper(w.text, w.received_at);
+    }
+  } catch (err) {
+    console.error("failed to load whisper history", err);
+  }
 }
 
 function lineFor(segmentId, speaker) {
@@ -113,6 +140,7 @@ async function joinCall() {
 
     setStatus(`Listening on ${roomName}.`);
     leaveBtn.disabled = false;
+    await loadWhisperHistory();
   } catch (err) {
     setStatus(`Error: ${err.message}`);
     joinBtn.disabled = false;
@@ -135,6 +163,7 @@ function sendWhisper() {
     destinationIdentities: [agentIdentity],
     topic: WHISPER_TOPIC,
   });
+  logWhisper(text, Date.now());
   whisperInput.value = "";
 }
 
@@ -146,6 +175,7 @@ function resetUi() {
   whisperInput.disabled = true;
   whisperBtn.disabled = true;
   remoteAudioContainer.innerHTML = "";
+  whisperLogEl.innerHTML = "";
   setStatus("Call ended.");
 }
 

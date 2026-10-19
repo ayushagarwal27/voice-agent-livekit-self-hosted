@@ -22,6 +22,9 @@
     .line.agent .speaker { color: #1a56db; }
     .line.user .speaker { color: #0f7a3d; }
     .line.interim { opacity: 0.6; }
+    #whisper-log { font-size: 0.85rem; color: #555; }
+    #whisper-log .entry { margin-bottom: 0.25rem; }
+    #whisper-log .entry time { color: #999; margin-right: 0.5rem; }
   </style>
 </head>
 <body>
@@ -42,6 +45,8 @@
     <input id="whisper-input" type="text" placeholder="Whisper guidance to the agent..." disabled />
     <button id="whisper-btn" disabled>Send</button>
   </div>
+
+  <div id="whisper-log"></div>
 
   <div id="remote-audio-container" style="display: none"></div>
 

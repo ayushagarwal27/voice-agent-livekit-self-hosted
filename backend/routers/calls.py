@@ -3,6 +3,7 @@ import json
 import os
 import uuid
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -11,7 +12,7 @@ from sqlalchemy.orm import Session
 from backend.services.dispatch import create_room_and_dispatch
 from backend.services.tokens import mint_customer_token, mint_operator_token
 from storage.db import get_session
-from storage.models import Agent, Call, TranscriptLine
+from storage.models import Agent, Call, TranscriptLine, Whisper
 
 router = APIRouter(prefix="/calls", tags=["calls"])
 
@@ -64,12 +65,21 @@ class TranscriptLineOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class WhisperOut(BaseModel):
+    text: str
+    received_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class CallOut(BaseModel):
     id: int
     agent_id: int
     room_name: str
     status: str
     transcript: list[TranscriptLineOut] | None = None
+    compliance: dict[str, Any] | str = "pending"
+    whispers: list[WhisperOut] = []
 
     model_config = {"from_attributes": True}
 
@@ -137,10 +147,22 @@ def get_call(call_id: int, session: Session = Depends(get_session)) -> CallOut:
         )
         transcript = [TranscriptLineOut.model_validate(line) for line in lines]
 
+    compliance = json.loads(call.compliance_json) if call.compliance_json else "pending"
+
+    whisper_rows = (
+        session.query(Whisper)
+        .filter_by(call_id=call_id)
+        .order_by(Whisper.received_at)
+        .all()
+    )
+    whispers = [WhisperOut.model_validate(row) for row in whisper_rows]
+
     return CallOut(
         id=call.id,
         agent_id=call.agent_id,
         room_name=call.room_name,
         status=call.status,
         transcript=transcript,
+        compliance=compliance,
+        whispers=whispers,
     )

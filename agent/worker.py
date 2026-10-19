@@ -27,6 +27,7 @@ from livekit.plugins.turn_detector.english import EnglishModel
 from agent.metrics import attach_metrics_recorder
 from agent.transcript import attach_transcript_recorder
 from agent.whisper import attach_whisper_listener
+from compliance.runner import run_compliance
 from storage.db import SessionLocal
 from storage.models import Agent as AgentRow
 from storage.models import Call
@@ -108,6 +109,14 @@ async def entrypoint(ctx: JobContext) -> None:
 
     async def on_shutdown() -> None:
         _mark_call_status(call_id, "ended", ended=True)
+        # Transcript is fully flushed by now (session has already stopped),
+        # so compliance can safely read it. Caught rather than left to
+        # propagate: a flaky LLM call must not block shutdown or be mistaken
+        # for the call itself having failed.
+        try:
+            await run_compliance(call_id)
+        except Exception:
+            logger.exception("compliance check failed for call %s", call_id)
 
     ctx.add_shutdown_callback(on_shutdown)
 
