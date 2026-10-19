@@ -3,8 +3,26 @@
 Operator-guided voice AI agent built on a self-hosted LiveKit server. See [AGENTS.md](AGENTS.md) for
 the full phase plan this repo follows.
 
-Status: Phase 6 (Barge-in with accurate history) in progress. Setup steps, architecture diagram, ports table,
-and latency results will be filled in as later phases land (see Phase 10 in AGENTS.md).
+Status: Phase 7 (Latency measurement) in progress. Setup steps, architecture diagram, ports table,
+and the final latency table will be filled in as later phases land (see Phase 10 in AGENTS.md); a
+real measured report already exists at [docs/latency.md](docs/latency.md).
+
+## Latency instrumentation (Phase 7)
+
+Per-turn latency is read off `ChatMessage.metrics` (a dict the framework attaches to every
+user/assistant turn), not hand-assembled from raw `metrics_collected` events -- the installed
+livekit-agents version marks that event deprecated in favor of this. See `agent/metrics.py` for
+the exact field mapping and `docs/latency.md` for a real measured report. Two approximations to
+know about:
+
+- `EOU` (end-of-turn delay) and `STT final` (transcription delay) are both measured from the same
+  anchor -- the user falling silent -- and run in parallel, not sequentially, so they should not be
+  summed into the total.
+- The stage columns do not fully account for `Total` (`e2e_latency`): reconstructing total latency
+  by adding up the stage columns undershoots the framework's own directly-measured total by roughly
+  50-280ms per turn in testing, because `on_user_turn_completed_delay` and internal scheduling gaps
+  between stages aren't captured as their own column. Treat `Total` as ground truth and the stage
+  columns as "where the time goes," not as inputs you can re-sum to get `Total` back exactly.
 
 ## Ports
 

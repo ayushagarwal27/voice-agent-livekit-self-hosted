@@ -20,3 +20,4 @@ wheels/
 # OS
 .DS_Store
 AGENTS.md
+/docs/latency.md

@@ -49,3 +49,21 @@ class TranscriptLine(Base):
     ts_abs: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ts_ms: Mapped[int] = mapped_column(Integer, nullable=False)
     interrupted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class TurnMetrics(Base):
+    __tablename__ = "turn_metrics"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    call_id: Mapped[int] = mapped_column(ForeignKey("calls.id"), nullable=False)
+    turn_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    # All columns below are nullable: an interrupted turn can be missing its
+    # later stages (e.g. cut before TTS ever started), and those are left
+    # NULL rather than guessed. See agent/metrics.py for what each maps to.
+    eou_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    stt_final_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    llm_ttft_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tts_first_audio_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    audio_published_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
