@@ -20,6 +20,19 @@ from storage.models import Agent, Call, TranscriptLine, Whisper
 
 router = APIRouter(prefix="/calls", tags=["calls"])
 
+
+def _browser_livekit_url() -> str:
+    """The address handed to a browser client, as opposed to `LIVEKIT_URL`
+    itself, which `api.LiveKitAPI()` (backend/services/dispatch.py) reads
+    implicitly for the backend's *own* server-to-server calls. The two only
+    diverge under Stretch S2 (docker compose): inside the compose network
+    LIVEKIT_URL has to be the "livekit" service name for the backend's own
+    calls to resolve, but a host browser can't resolve that name, so compose
+    sets LIVEKIT_PUBLIC_URL to "ws://localhost:7880" for this. Outside
+    compose there's only one address, so this falls back to LIVEKIT_URL."""
+    return os.environ.get("LIVEKIT_PUBLIC_URL") or os.environ["LIVEKIT_URL"]
+
+
 # How long to wait for the dispatched worker to actually join and mark the
 # call "active" before giving up. Agent dispatch creation succeeds even when
 # no worker is registered for `support-agent` (LiveKit queues the job rather
@@ -118,7 +131,7 @@ async def create_call(payload: CallCreate, session: Session = Depends(get_sessio
         )
 
     token = mint_customer_token(call.room_name, identity=f"customer-{call.id}")
-    livekit_url = os.environ["LIVEKIT_URL"]
+    livekit_url = _browser_livekit_url()
     return CallCreateOut(call_id=call.id, room=call.room_name, token=token, livekit_url=livekit_url)
 
 
@@ -131,7 +144,7 @@ def create_operator_token(call_id: int, session: Session = Depends(get_session))
     # Suffixed so two operator tabs open on the same call don't collide on identity.
     identity = f"operator-{call_id}-{uuid.uuid4().hex[:8]}"
     token = mint_operator_token(call.room_name, identity=identity)
-    livekit_url = os.environ["LIVEKIT_URL"]
+    livekit_url = _browser_livekit_url()
     return OperatorTokenOut(room=call.room_name, token=token, livekit_url=livekit_url)
 
 
@@ -145,7 +158,7 @@ def create_takeover_token(call_id: int, session: Session = Depends(get_session))
 
     identity = f"operator-takeover-{call_id}-{uuid.uuid4().hex[:8]}"
     token = mint_operator_takeover_token(call.room_name, identity=identity)
-    livekit_url = os.environ["LIVEKIT_URL"]
+    livekit_url = _browser_livekit_url()
     return OperatorTokenOut(room=call.room_name, token=token, livekit_url=livekit_url)
 
 

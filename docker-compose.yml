@@ -16,3 +16,63 @@ services:
       - "7880:7880/tcp" # HTTP API + WebSocket signalling
       - "7881:7881/tcp" # ICE/TCP fallback
       - "50000-50100:50000-50100/udp" # RTP/SRTP media range
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: voiceagent
+      POSTGRES_PASSWORD: voiceagent
+      POSTGRES_DB: voiceagent
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voiceagent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Signs tokens and serves the API + static web/ client (backend/main.py).
+  # It also makes its own LiveKit server-API calls (room creation, agent
+  # dispatch -- backend/services/dispatch.py's `api.LiveKitAPI()` reads
+  # LIVEKIT_URL from the environment implicitly), so LIVEKIT_URL here has to
+  # be the service name, the same as the worker. The browser gets a
+  # *different* address, ws://localhost:7880, via LIVEKIT_PUBLIC_URL --
+  # see backend/routers/calls.py's `_browser_livekit_url()` -- since a host
+  # browser can't resolve "livekit" (AGENTS.md S2: "containers reach LiveKit
+  # by service name, the browser by localhost").
+  backend:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      LIVEKIT_URL: "ws://livekit:7880"
+      LIVEKIT_PUBLIC_URL: "ws://localhost:7880"
+      DATABASE_URL: "postgresql+psycopg://voiceagent:voiceagent@postgres:5432/voiceagent"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+
+  # Joins rooms as the agent (agent/worker.py). Dials LiveKit itself, from
+  # inside the compose network, so it needs the service name -- "localhost"
+  # there would mean the worker's own container, not livekit's.
+  worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      LIVEKIT_URL: "ws://livekit:7880"
+      DATABASE_URL: "postgresql+psycopg://voiceagent:voiceagent@postgres:5432/voiceagent"
+    command: ["uv", "run", "python", "-m", "agent.worker", "start"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+
+volumes:
+  pgdata:

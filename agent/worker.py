@@ -8,8 +8,12 @@ DB, and marks the call `active`/`ended` as the session starts and stops.
 
 Usage:
   uv run -m livekit.agents download-files   # once, to fetch the VAD/turn-detector models
-  uv run python agent/worker.py console      # talk to it from the terminal (mic/speakers)
-  uv run python agent/worker.py dev          # join real rooms on the self-hosted LiveKit server
+  uv run python -m agent.worker console      # talk to it from the terminal (mic/speakers)
+  uv run python -m agent.worker dev          # join real rooms on the self-hosted LiveKit server
+
+(Must be run with `-m`, not as a script path -- `python agent/worker.py` puts
+`agent/` itself on sys.path instead of the project root, breaking every
+`from agent...` import in this file.)
 """
 
 import json

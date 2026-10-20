@@ -5,7 +5,7 @@ LLM-backed support agent over WebRTC, a hidden operator can listen in and whispe
 and every call is checked post-hoc against two compliance rules. See [AGENTS.md](AGENTS.md) for the
 full phase plan this repo follows.
 
-Status: Phases 0-10 complete, plus stretch goal S1 (operator take-over).
+Status: Phases 0-10 complete, plus stretch goals S1 (operator take-over) and S2 (docker compose up).
 
 ## Architecture
 
@@ -67,6 +67,53 @@ Run the test suite (pure unit tests, no network/provider calls, no running serve
 ```bash
 uv run pytest
 ```
+
+## Everything in Docker Compose (Stretch S2)
+
+Steps 5-8 above (LiveKit, backend, worker) plus Postgres in place of SQLite, all in one
+`docker compose up`, for running this on a clean checkout without installing Python at all:
+
+```bash
+cp .env.example .env
+# edit .env: DEEPGRAM_API_KEY, CARTESIA_API_KEY, and one of GROQ_API_KEY/OPENAI_API_KEY
+# (LIVEKIT_* already work out of the box, same as local use)
+
+docker compose up -d --build
+docker compose exec backend uv run python -m scripts.seed_agent
+```
+
+Then open `http://localhost:8000/` and `http://localhost:8000/operator.html` exactly as in local
+use. `docker compose down -v` tears it down, including the Postgres volume.
+
+**The backend and worker images are built from the same [`Dockerfile`](Dockerfile)**: copy
+`pyproject.toml` + `uv.lock`, `uv sync --frozen`, copy the rest of the source, then
+`uv run python -m livekit.agents download-files` to bake the VAD/turn-detector model weights into
+the image (so `docker compose up` isn't fetching, or racing on, them at runtime). The two services
+differ only in the `command:` docker-compose.yml runs on top of that image.
+
+**Networking (the part that actually needs care here):** containers reach LiveKit by its service
+name (`livekit`), but a browser running on the host cannot resolve that name -- only `localhost`
+reaches the published ports. Both the worker and the backend need to reach LiveKit from *inside*
+the compose network (the worker to join rooms; the backend for its own server-API calls --
+`backend/services/dispatch.py`'s `api.LiveKitAPI()` reads `LIVEKIT_URL` from the environment to
+create rooms and dispatch the agent), so both get `LIVEKIT_URL=ws://livekit:7880`. But the backend
+*also* hands a LiveKit URL to the browser in every token response, and that one has to be
+`ws://localhost:7880` instead -- so docker-compose.yml sets a second variable,
+`LIVEKIT_PUBLIC_URL`, just for that, and `backend/routers/calls.py`'s `_browser_livekit_url()`
+prefers it over `LIVEKIT_URL` when building a response. Outside compose there's no reason for the
+two to differ, so `LIVEKIT_PUBLIC_URL` is simply unset and everything falls back to `LIVEKIT_URL`,
+unchanged from before S2.
+
+`DATABASE_URL` is overridden the same way, to a `postgresql+psycopg://` URL pointing at the
+`postgres` service, on both the backend and the worker -- `.env`'s SQLite default stays correct
+for plain local (non-Docker) use, since the override only lives in docker-compose.yml's
+`environment:` block for those two services.
+
+Verified end-to-end (not just "containers start"): built both images from a clean checkout, blew
+away the Postgres volume, brought the whole stack up with one `docker compose up -d`, seeded the
+agent, created a call over the real HTTP API, confirmed the worker logged "received job request"
+and the call row reached `status: active` inside the Postgres container, and joined the room with
+a throwaway LiveKit client to confirm the agent participant was actually there.
 
 ## Ports & config
 

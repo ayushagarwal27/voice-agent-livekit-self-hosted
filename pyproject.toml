@@ -7,6 +7,7 @@ dependencies = [
     "fastapi>=0.147.0",
     "livekit-agents[cartesia,deepgram,groq,openai,silero,turn-detector]>=1.8.8",
     "livekit-api>=1.2.2",
+    "psycopg[binary]>=3.2",
     "pydantic>=2.14.1",
     "python-dotenv>=1.2.4",
     "sqlalchemy>=2.1.5",
