@@ -10,7 +10,11 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.services.dispatch import create_room_and_dispatch
-from backend.services.tokens import mint_customer_token, mint_operator_token
+from backend.services.tokens import (
+    mint_customer_token,
+    mint_operator_takeover_token,
+    mint_operator_token,
+)
 from storage.db import get_session
 from storage.models import Agent, Call, TranscriptLine, Whisper
 
@@ -127,6 +131,20 @@ def create_operator_token(call_id: int, session: Session = Depends(get_session))
     # Suffixed so two operator tabs open on the same call don't collide on identity.
     identity = f"operator-{call_id}-{uuid.uuid4().hex[:8]}"
     token = mint_operator_token(call.room_name, identity=identity)
+    livekit_url = os.environ["LIVEKIT_URL"]
+    return OperatorTokenOut(room=call.room_name, token=token, livekit_url=livekit_url)
+
+
+@router.post("/{call_id}/takeover-token", response_model=OperatorTokenOut)
+def create_takeover_token(call_id: int, session: Session = Depends(get_session)) -> OperatorTokenOut:
+    """Minted when the operator clicks "Take over" (Stretch S1). Separate identity
+    from the listen-only one, and no longer hidden -- see tokens.py."""
+    call = session.get(Call, call_id)
+    if call is None:
+        raise HTTPException(status_code=404, detail="call not found")
+
+    identity = f"operator-takeover-{call_id}-{uuid.uuid4().hex[:8]}"
+    token = mint_operator_takeover_token(call.room_name, identity=identity)
     livekit_url = os.environ["LIVEKIT_URL"]
     return OperatorTokenOut(room=call.room_name, token=token, livekit_url=livekit_url)
 

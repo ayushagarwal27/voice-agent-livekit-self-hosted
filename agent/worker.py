@@ -25,6 +25,7 @@ from livekit.plugins import cartesia, deepgram, openai, silero
 from livekit.plugins.turn_detector.english import EnglishModel
 
 from agent.metrics import attach_metrics_recorder
+from agent.takeover import attach_takeover_listener
 from agent.transcript import attach_transcript_recorder
 from agent.whisper import attach_whisper_listener
 from compliance.runner import run_compliance
@@ -141,6 +142,7 @@ async def entrypoint(ctx: JobContext) -> None:
     attach_transcript_recorder(session, call_id, call_start_ts)
     attach_metrics_recorder(session, call_id)
     attach_whisper_listener(ctx.room, session, call_id)
+    attach_takeover_listener(ctx.room, session, call_id, call_start_ts)
 
     agent = SupportAgent(system_prompt)
 

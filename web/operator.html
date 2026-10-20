@@ -21,20 +21,29 @@
     .line .speaker { font-weight: 600; }
     .line.agent .speaker { color: #1a56db; }
     .line.user .speaker { color: #0f7a3d; }
+    .line.operator .speaker { color: #b45309; }
     .line.interim { opacity: 0.6; }
     #whisper-log { font-size: 0.85rem; color: #555; }
     #whisper-log .entry { margin-bottom: 0.25rem; }
     #whisper-log .entry time { color: #999; margin-right: 0.5rem; }
+    #takeover-btn.active { background: #b45309; color: #fff; }
   </style>
 </head>
 <body>
   <h1>Operator Console</h1>
-  <p>Hidden listener: you hear both sides, but neither party sees or hears you.</p>
+  <p>Hidden listener by default: you hear both sides, but neither party sees or hears you.
+  "Take over" publishes your mic so the customer hears you directly -- see README for the
+  visibility trade-off that comes with that.</p>
 
   <div class="row">
     <input id="call-id-input" type="number" placeholder="Call ID" />
     <button id="join-btn">Join</button>
     <button id="leave-btn" disabled>Leave</button>
+  </div>
+
+  <div class="row">
+    <button id="takeover-btn" disabled>Take over</button>
+    <button id="handback-btn" disabled>Hand back</button>
   </div>
 
   <div id="status">Not connected.</div>

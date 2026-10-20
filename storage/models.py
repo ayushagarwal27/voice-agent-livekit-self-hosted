@@ -44,7 +44,7 @@ class TranscriptLine(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     call_id: Mapped[int] = mapped_column(ForeignKey("calls.id"), nullable=False)
     seq: Mapped[int] = mapped_column(Integer, nullable=False)
-    speaker: Mapped[str] = mapped_column(String, nullable=False)  # "agent" | "user"
+    speaker: Mapped[str] = mapped_column(String, nullable=False)  # "agent" | "user" | "operator"
     text: Mapped[str] = mapped_column(Text, nullable=False)
     ts_abs: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ts_ms: Mapped[int] = mapped_column(Integer, nullable=False)

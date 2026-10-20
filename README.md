@@ -5,7 +5,7 @@ LLM-backed support agent over WebRTC, a hidden operator can listen in and whispe
 and every call is checked post-hoc against two compliance rules. See [AGENTS.md](AGENTS.md) for the
 full phase plan this repo follows.
 
-Status: Phases 0-10 complete.
+Status: Phases 0-10 complete, plus stretch goal S1 (operator take-over).
 
 ## Architecture
 
@@ -149,6 +149,53 @@ Two things worth knowing:
   concept, but would need an allow-list or stricter framing before letting less-trusted operators near it.
 - The operator console is intentionally **one-way** (operator -> agent only): it's a whisper
   channel for steering the agent, not a two-way chat with the customer.
+
+## Take over (Stretch S1)
+
+A "Take over" button on the operator console lets a human fully replace the agent mid-call,
+then hand back.
+
+LiveKit grants are fixed per token, and the listen-only grant has `can_publish=False`, so
+publishing a mic track means reconnecting with a different, upgraded token -- there's no way to
+add a permission to a live connection. `POST /calls/{id}/takeover-token` mints that token
+(`mint_operator_takeover_token`, `backend/services/tokens.py`): `hidden=False`, `can_publish=True`.
+**Trade-off, deliberately accepted:** the operator is no longer a hidden participant once they take
+over, for the rest of the call, even after handing back (reverting to hidden would need yet another
+reconnect, and the web client has no participant list, so nothing becomes visibly different to the
+customer). `operator.js`'s `takeOver()` fetches that token, disconnects the listen-only room, opens
+a fresh `Room()` with it, and calls `setMicrophoneEnabled(true)` -- the customer's client
+auto-subscribes to the new audio track exactly like any other participant's, so "the customer hears
+the human" needed no changes on the customer side at all.
+
+Once the mic track is actually publishing, the operator sends a reliable data message
+(`operator_takeover_start`, addressed only to the agent's identity, same pattern as whispers).
+`agent/takeover.py` handles it:
+
+- Mutes the agent with the public `AgentSession` toggles -- `session.interrupt()` to cut off
+  whatever it's currently saying, then `session.output.set_audio_enabled(False)` (stop TTS) and
+  `session.input.set_audio_enabled(False)` (stop generating new replies). Deliberately *not* done
+  by reaching into `AgentActivity`'s private `_scheduling_paused` flag, even though that exists and
+  looked tempting -- the public input/output toggles are documented API and do the same job.
+- Subscribes directly to the operator's now-published audio track (the worker auto-subscribes to
+  every track by default, so this is just finding it on `track_subscribed`) and runs a throwaway
+  `deepgram.STT()` stream against it, independent of the main pipeline, so what the human says
+  isn't lost.
+- On `operator_takeover_end` (the "Hand back" button): stops that STT stream, folds whatever it
+  collected into the agent's chat context as a private note ("a human operator just told the
+  caller: ...") the same way a whisper is added -- appended, not forced into an immediate reply --
+  and re-enables input/output. The next customer turn gets a normal reply that's aware of what the
+  human said.
+- Every finalized line from that STT stream is also persisted as a `transcript_lines` row with
+  `speaker="operator"`, so it shows up in the final transcript from `GET /calls/{id}`.
+
+**Trade-off, deliberately accepted:** pausing `session.input` stops the *whole* STT/turn-detection
+pipeline, not just the reply step, so the customer talking over the human during a takeover isn't
+transcribed or acted on by the agent either -- only the operator's track is. That was the simplest
+way to guarantee zero replies mid-takeover without touching private scheduling internals; for this
+proof of concept the customer is expected to listen while the human has the floor, the same as any
+real call transfer. The human's words also don't appear in the *live* transcript panel while
+talking (only the agent's own TTS pipeline publishes the `lk.transcription` text stream that drives
+that) -- they show up once the call ends and `GET /calls/{id}` returns the full transcript.
 
 ## Post-call compliance (Phase 9)
 
